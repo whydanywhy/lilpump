@@ -1,0 +1,232 @@
+import numpy as np
+from scipy.optimize import fsolve as fsolve
+import CoolProp.CoolProp as cp
+#############################################################################
+# Helpers
+def clear():
+    print('\x1b[2J')
+def info(team):
+    for i in range(len(team)):
+        print(team[i][0], '\t', team[i][1], '\t<', team[i][2], '>')
+    print('EML 4706 Design of Thermal Systems')
+    print('Instructor Anthony Abrahao <aabrao@fiu.edu>')
+    print('Florida International University')
+    print('Fall, 2018')
+    print(' ')
+#############################################################################
+# Unit convesions
+def gpm2fps(gpm):
+    return gpm/448.8325660485
+
+def f2k(fdeg):
+    return ((fdeg-32)*5/9+273.15)
+
+def pa2psi(pre):
+    return pre*0.0001450377 
+
+def psi2pa(pre):
+    return pre/0.0001450377
+
+def kgm3tolbft3(dens):
+    return dens*0.062428
+
+def tons2btuh(load):
+    return load*12000
+
+#############################################################################
+# Pressure losses
+def swameeJain(Re,e):
+    f = np.log10( e/3.7 + 5.74/(Re**0.9) )
+    f = 0.25/(f**2)
+    return f
+def colebrook(f,Re,e):
+    f = 1.0/np.sqrt(f) + 2.0*np.log10( e/3.7 + 2.51/(Re*np.sqrt(f)) )
+    return f
+def frictionFactor(Re,e):
+    if Re < 2300: # Laminar flow
+        f = 64.0/Re
+    else: # Turbulent flow
+        f = swameeJain(Re,e)
+        f, = fsolve(colebrook,f, args = (Re,e))
+    return f
+#############################################################################
+# North American set of standard sizes for pipes
+def pipeListSizes( type ):
+    type = type.strip()    
+    type = type.lower()
+    if type != 'carbon steel (schedule 40)':
+        print('Ops, pipe type "%s" not recognized!\n', type)
+        return np.nan,np.nan,np.nan
+    # Schedule 40:      Dn  ,   Do  ,   t,
+    D = np.array( [[  0.125,  0.405, 0.068, 38.52 ],
+                   [  0.250,  0.540, 0.088, 39.60 ],
+                   [  0.375,  0.675, 0.091, 42.96 ],
+                   [  0.500,  0.840, 0.109, 7.05 ],
+                   [  0.750,  1.050, 0.113, 7.37 ],
+                   [  1.000,  1.315, 0.133, 9.80 ],
+                   [  1.250,  1.660, 0.140, 12.90 ],
+                   [  1.500,  1.900, 0.145, 15.42 ],
+                   [  2.000,  2.375, 0.154, 20.00 ],
+                   [  2.500,  2.875, 0.203, 33.95 ],
+                   [  3.000,  3.500, 0.216, 47.64 ],
+                   [  3.500,  4.000, 0.226, 66.66 ],
+                   [  4.000,  4.500, 0.237, 66.66 ],
+                   [  5.000,  5.563, 0.258, 66.66 ],
+                   [  6.000,  6.625, 0.280, 123.36 ],
+                   [  8.000,  8.625, 0.322, 430.72 ],
+                   [ 10.000, 10.750, 0.365, 66.66 ],
+                   [ 12.000, 12.750, 0.406, 66.66 ],
+                   [ 14.000, 14.000, 0.438, 66.66 ],
+                   [ 16.000, 16.000, 0.500, 66.66 ],
+                   [ 18.000, 18.000, 0.562, 66.66 ],
+                   [ 20.000, 20.000, 0.594, 66.66 ],
+                   [ 24.000, 24.000, 0.688, 66.66 ],
+                   [ 32.000, 32.000, 0.688, 66.66 ],
+                   [ 34.000, 34.000, 0.688, 66.66 ],
+                   [ 36.000, 36.000, 0.750, 66.66 ]] ) # in
+    return D[:,0],D[:,1]-2*D[:,2],D[:,1],D[:,3]    
+#############################################################################
+# Main
+    
+team = [ ["Daniel Martinez", '4583204', 'dmart371@fiu.edu' ],
+         ["Mellony Ladino  ", '5793331', 'mladi004@fiu.edu' ],
+         ["Jose Rojas       ", '4844382', 'jroja086@fiu.edu' ] ]
+clear()
+info(team)
+
+#DESIGN PARAMETERS
+Kentrance=0.5
+Kstrainer=1.5
+K90Bend=0.3
+Kball=0.05
+
+# Problem values
+LSucPiping=50 #ft
+Patm=14.7 #Atm
+Temp=70 #Farenheit
+Temp2=60 #Farenheit
+CPressDrop=15 #ft
+DisPump2CTower=45 #ft
+NPSHR=LSucPiping #ft
+
+Load=39 #Tons (AVERAGE PIDS)
+print('System total cooling load:                    : ', Load,' Tons')
+#Height=NPSHR #ft
+
+#ELEMENTS COUNT
+#Total number of elements
+TCountCTowers=1
+TCountPumps=1
+TCountCondensers=1
+TCountPipeft=70
+TCountValves=5
+TCount90Elbows=5
+TCountStrainers=1
+TCountEJoints=2
+
+#Element prices
+PCountCTowers=5000
+PCountPumps=1000
+PCountCondensers=2000
+PCountValves=60
+PCount90Elbows=15
+PCountStrainers=25
+PCountEJoints=30
+
+#Elements between Basin and Pump
+PEntranceNum=1
+StrainerNum=1
+NinetyBendNum=2
+BallValveNum=1
+
+# Industry starndard for selection of economical pipe diameters
+Vmax = 5.0 # ft/s
+Hmax = 3.0 # ft per 100 ft of pipe
+
+# Absolute pipe roughness
+E = 0.00197/12.0 # ft (new carbon steel!)
+
+# Constants
+g = 32.174 # ft/s^2
+pi = np.pi
+
+# Volumetric flow rate
+DeltaT=abs(Temp2-Temp)
+Qgpm=tons2btuh(Load)/(DeltaT*500.4)
+print('System volumetric flow rate at full load      : ', round(Qgpm), ' gpm')
+print(' ')
+Q = gpm2fps(Qgpm) # ft^3/s
+
+# Load steel pipe (schedule 40) table
+Dn,Di,Do,Prices = pipeListSizes('Carbon steel (schedule 40)') # in
+
+# Searching for an economical pipe size
+for i in range( len(Di) ):
+    nps = Dn[i] # in
+    D = Di[i]/12.0 # ft
+    PCountPipeft=Prices[i] #USD
+    
+    # Checks maximum velocity criteria
+    A = pi*(D**2)/4.0 # ft^2
+    V = Q/A # ft/s
+    # Checks maximum head loss criteria
+    L = 100.0 # ft
+    # Keeping going with the correct formulas...
+    TempK=f2k(Temp)
+    PressPa=psi2pa(Patm)
+    Press=pa2psi(cp.PropsSI('P','T',TempK,'Q',1,'Water'))
+    Vel = V* 0.3048 #Conversion
+    Len=D*0.3048
+    
+    Dens=cp.PropsSI('D','T',TempK,'P',PressPa,'Water')
+    Vis=cp.PropsSI('V','T',TempK,'P',PressPa,'Water')
+    
+    Re = Vel*Len*Dens/Vis 
+    f = frictionFactor(Re, E/D) 
+    H = (f * L * V**2) / (2 * D  * g)
+    Hit=H/L*LSucPiping+(Kentrance*PEntranceNum+Kstrainer*StrainerNum+K90Bend*NinetyBendNum+Kball*BallValveNum)*V**2/(2*g) 
+    NPSHA=( Patm-Press)/( kgm3tolbft3(cp.PropsSI('D','T',TempK,'P',PressPa,'Water'))*g )*g*(12**2)+(V**2/(2*g))+CPressDrop-Hit
+   
+    if NPSHA>NPSHR:
+        CavFlag=1
+    else:
+        CavFlag=0
+    
+    # Stopping criteria
+    if V <= Vmax and H <= Hmax and CavFlag==0:
+        
+        break
+        
+print('Selected pipe material: Carbon steel (schedule 40)')
+print('Nominal pipe size    : ', nps, ' in')
+print('Inside pipe diameter : ', round(D,2), ' ft')
+print('Water velocity       : ', round(V,2), ' fps')
+print('Lost head            : ', round(H,2), ' ft per 100 ft of pipe')
+
+
+HCond = CPressDrop
+H1 = H / L * (2*TCountPipeft+DisPump2CTower+CPressDrop) #Major Losses
+print('Major Loss           : ', round(H1,2), ' ft')
+#Minor Losses: (from table A.14 for 6 in pipe)
+Hlm = (Kentrance + 5*K90Bend + Kstrainer + 4*Kball) * V * V / (2 * g) #Minor head loss
+print('Minor Loss           : ', round(Hlm,2), ' ft')
+print('Equipment Loss       : ', round(HCond,2), ' ft')
+Hlt = H1 + Hlm + HCond #Total losses
+hPump = DisPump2CTower - CPressDrop + Hlt
+
+print('Pump Head            : ', round(hPump), ' ft')
+print('No Cavitation Occurs')
+print(' ')
+
+TPrice=TCountCTowers*PCountCTowers+TCountPumps*PCountPumps+TCountCondensers*PCountCondensers+TCountPipeft*PCountPipeft+TCountValves*PCountValves+TCount90Elbows*PCount90Elbows+TCountStrainers*PCountStrainers+TCountEJoints*PCountEJoints
+
+print('Total of Cooling Towers required:  ', TCountCTowers,'              Price:    ',TCountCTowers*PCountCTowers,' USD','    Percent of total cost:    ',round(TCountCTowers*PCountCTowers/TPrice*100),'  %') 
+print('Total of Pumps required:  ', TCountPumps,'                       Price:    ',TCountPumps*PCountPumps,' USD','    Percent of total cost:    ',round(TCountPumps*PCountPumps/TPrice*100),'  %')
+print('Total of Condensers required:  ', TCountCondensers,'                  Price:    ',TCountCondensers*PCountCondensers,' USD','    Percent of total cost:    ',round(TCountCondensers*PCountCondensers/TPrice*100),'  %')
+print('Total of Pipe required:  ', TCountPipeft,'                       Price:    ',TCountPipeft*PCountPipeft,' USD','  Percent of total cost:    ',round(TCountPipeft*PCountPipeft/TPrice*100),'  %')
+print('Total of Valves required:  ', TCountValves,'                      Price:    ',TCountValves*PCountValves,' USD','     Percent of total cost:    ',round(TCountValves*PCountValves/TPrice*100),'  %')
+print('Total of 90 Elbows required:  ', TCount90Elbows,'                   Price:    ',TCount90Elbows*PCount90Elbows,' USD','      Percent of total cost:    ',round(TCount90Elbows*PCount90Elbows/TPrice*100),'  %')
+print('Total of Strainers required:  ', TCountStrainers,'                   Price:    ',TCountStrainers*PCountStrainers,' USD','      Percent of total cost:    ',round(TCountStrainers*PCountStrainers/TPrice*100),'  %')
+print('Total of Expansion Joints Towers required:  ', TCountEJoints,'     Price:    ',TCountEJoints*PCountEJoints,' USD','      Percent of total cost:    ',round(TCountEJoints*PCountEJoints/TPrice*100),'  %')
+
+
